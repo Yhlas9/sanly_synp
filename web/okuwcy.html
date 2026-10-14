@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="tk" >
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sanly Synp — okuwçy</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">Sanly Synp<small v-if="me">{{ me.display_name }}</small></div>
+    <a class="btn" href="/profil">Şahsy otag</a>
+    <span v-if="connected" class="badge ok">● Birikdi</span>
+    <span v-else class="badge warn">○ Birikme ýok</span>
+  </header>
+
+  <main class="wrap" :class="{ narrow: !joined }">
+
+    <div v-if="error" class="notice err" role="alert">
+      <b>{{ error.msg }}</b><span class="next">{{ error.next }}</span>
+    </div>
+
+    <!-- 1. Sapaga goşulmak -->
+    <section v-if="!joined" class="card entry">
+      <p class="eyebrow">Sanly Synp</p>
+      <h1>Sapaga goşulmak</h1>
+      <p class="lede">Mugallymyň beren kodyny we adyňyzy ýazyň.</p>
+      <div class="gol-rule"></div>
+      <form @submit.prevent="join">
+        <div class="field">
+          <label for="code">Sapak kody</label>
+          <input id="code" class="code-input" v-model="form.code" @input="peekRoster" required
+                 autocomplete="off" autocapitalize="characters"
+                 maxlength="5" placeholder="·····">
+        </div>
+        <div class="field">
+          <label for="name">Adyňyz
+            <span v-if="rosterGroup" class="hint">{{ rosterGroup }} — sanawdan saýlaň</span>
+          </label>
+          <tk-select v-if="rosterNames.length" id="name" v-model="form.name"
+                     :options="rosterOptions"></tk-select>
+          <input v-else id="name" v-model="form.name" required autocomplete="name">
+        </div>
+        <button class="btn-primary btn-block" :disabled="busy">Goşulmak</button>
+      </form>
+    </section>
+
+    <template v-else>
+
+      <!-- Mugallymyň ekrany -->
+      <section v-if="frame" class="card">
+        <div class="row">
+          <h2 style="margin:0">Mugallymyň ekrany</h2>
+          <div class="spacer"></div>
+          <button @click="zoom = !zoom">{{ zoom ? 'Kiçeltmek' : 'Ulaltmak' }}</button>
+        </div>
+        <div class="screen-stage mt" :class="{ zoom }">
+          <img :src="frame" alt="Mugallymyň görkezýän ekrany">
+        </div>
+      </section>
+
+      <!-- Tabşyryk ýapyk -->
+      <section v-if="closedReason" class="card center waiting">
+        <h1>Tabşyryk elýeterli däl</h1>
+        <p class="muted">{{ closedReason }}</p>
+        <div class="gol-rule" style="margin-top:18px"></div>
+        <span class="badge warn">möhlet daşynda</span>
+      </section>
+
+      <!-- 2. Garaşylýar -->
+      <section v-if="state === 'lobby' && !closedReason" class="card center waiting">
+        <div class="pulse" aria-hidden="true"></div>
+        <h1>Sapaga goşuldyňyz</h1>
+        <p class="muted">Mugallymyň başlamagyna garaşyň.</p>
+        <div class="gol-rule" style="margin-top:18px"></div>
+        <span class="badge">Kod: {{ session.join_code }}</span>
+      </section>
+
+      <!-- 3. Sapak -->
+      <section v-if="state === 'lesson' && lesson" class="card">
+        <h1>{{ lesson.title }}</h1>
+        <p class="muted">{{ lesson.topic }}</p>
+        <p v-if="lesson.goal"><b>Okuw maksady:</b> {{ lesson.goal }}</p>
+        <div v-html="renderBody(lesson.body_md)"></div>
+
+        <h3 class="mt">Interaktiw görkezme</h3>
+        <div class="demo-box" ref="demoHost"></div>
+
+        <template v-if="lesson.practical_task">
+          <h3 class="mt">Özbaşdak ýerine ýetirilýän ýumuş</h3>
+          <p>{{ lesson.practical_task }}</p>
+        </template>
+      </section>
+
+      <!-- 4. Synag -->
+      <section v-if="state === 'test' && !closedReason">
+        <div class="card">
+          <div class="row">
+            <div>
+              <h1 style="margin:0">{{ session.test_title || 'Synag' }}</h1>
+              <span class="muted">{{ answeredCount }} / {{ questions.length }} jogap berildi</span>
+            </div>
+            <div class="spacer"></div>
+            <div class="center">
+              <div class="timer" :class="{ low: remaining < 60 }">{{ clock }}</div>
+              <div class="muted" style="font-size:.8rem">galan wagt</div>
+              <div v-if="session.mode === 'homework'" class="muted" style="font-size:.76rem">
+                öý işi · {{ fmtTime(session.closes_at) }} çenli
+              </div>
+            </div>
+          </div>
+          <div v-if="pendingCount" class="notice info mt">
+            <b>{{ pendingCount }} jogap ugradylmaga garaşýar</b>
+            <span class="next">Tor dikeldilende olar awtomatik ugradylar. Sahypany ýapmaň.</span>
+          </div>
+        </div>
+
+        <article v-for="(q, idx) in questions" :key="q.id" class="q-card">
+          <div class="q-head">
+            <span class="q-num">{{ idx + 1 }}.</span>
+            <span class="q-prompt">{{ q.prompt }}</span>
+          </div>
+          <div class="muted" style="font-size:.85rem;margin-bottom:10px">
+            {{ kindLabel(q.kind) }} · {{ q.points }} bal
+          </div>
+
+          <!-- Jogap saýlamak -->
+          <template v-if="q.kind === 'choice'">
+            <label v-for="opt in q.payload.options" :key="opt.id" class="opt"
+                   :class="{ sel: isSelected(q, opt.id) }">
+              <input :type="q.payload.multiple ? 'checkbox' : 'radio'" :name="'q' + q.id"
+                     :checked="isSelected(q, opt.id)" @change="toggleChoice(q, opt.id)">
+              <span>{{ opt.text }}</span>
+            </label>
+          </template>
+
+          <!-- Gysga jogap -->
+          <input v-else-if="q.kind === 'short'" type="text"
+                 :value="val(q).text || ''" @input="setValue(q, { text: $event.target.value })"
+                 placeholder="Jogabyňyzy ýazyň">
+
+          <!-- Sanly jogap -->
+          <div v-else-if="q.kind === 'numeric'" class="row">
+            <input type="number" step="any" style="flex:1"
+                   :value="val(q).value ?? ''"
+                   @input="setValue(q, { value: parseFloat($event.target.value), unit: q.payload.unit || '' })"
+                   placeholder="San">
+            <span v-if="q.payload.unit" class="badge">{{ q.payload.unit }}</span>
+          </div>
+
+          <!-- Gabat getirmek -->
+          <div v-else-if="q.kind === 'match'">
+            <div v-for="l in q.payload.left" :key="l.id" class="match-row">
+              <span class="grow">{{ l.text }}</span>
+              <tk-select class="compact" style="max-width:52%"
+                         :model-value="(val(q).pairs || {})[l.id] || ''"
+                         :options="matchOptions(q)"
+                         @update:model-value="setPair(q, l.id, $event)"></tk-select>
+            </div>
+          </div>
+
+          <!-- Yzygiderlilik düzmek -->
+          <div v-else-if="q.kind === 'order'">
+            <div v-for="(itemId, pos) in orderOf(q)" :key="itemId" class="order-item">
+              <span class="q-num">{{ pos + 1 }}</span>
+              <span class="grow">{{ itemText(q, itemId) }}</span>
+              <button @click="move(q, pos, -1)" :disabled="pos === 0" aria-label="ýokary">↑</button>
+              <button @click="move(q, pos, 1)" :disabled="pos === orderOf(q).length - 1" aria-label="aşak">↓</button>
+            </div>
+          </div>
+
+          <!-- Açyk jogap / amaly iş -->
+          <template v-else>
+            <textarea :value="val(q).text || ''"
+                      @input="setValue(q, { text: $event.target.value })"
+                      :placeholder="q.kind === 'practical' ? 'Tejribäňiziň netijesini ýazyň' : 'Düşündirişiňizi ýazyň'"></textarea>
+
+            <!-- Amaly iş: netijäni faýl ýa-da surat görnüşinde hem tabşyryp bolýar -->
+            <div v-if="q.kind === 'practical'" class="upload">
+              <label :for="'f' + q.id">Faýl goşmak
+                <span class="hint">surat, PDF, tablisa ýa-da tekst · 10 MB çenli</span>
+              </label>
+              <input :id="'f' + q.id" type="file" @change="uploadFile(q, $event)"
+                     accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.csv,.xlsx,.xls,.docx,.odt,.ods">
+              <ul v-if="(val(q).files || []).length" class="list files">
+                <li v-for="f in val(q).files" :key="f.id">
+                  <span class="grow">📎 {{ f.file_name }}</span>
+                  <span class="badge">{{ kb(f.size_bytes) }}</span>
+                  <button class="btn-danger" @click="removeFile(q, f.id)">Aýyrmak</button>
+                </li>
+              </ul>
+              <p v-if="uploading[q.id]" class="muted">Ugradylýar…</p>
+            </div>
+          </template>
+
+          <div class="row mt">
+            <span v-if="status[q.id] === 'saved'" class="badge ok">✓ saklandy</span>
+            <span v-else-if="status[q.id] === 'pending'" class="badge warn">⏳ iberilmegine garaşylýar</span>
+            <span v-else class="badge">— jogap ýok</span>
+            <span v-if="q.hint" class="muted" style="font-size:.85rem">💡 {{ q.hint }}</span>
+          </div>
+        </article>
+
+        <div class="card">
+          <button class="btn-primary btn-block" @click="submit" :disabled="busy">
+            Işi tabşyrmak
+          </button>
+          <p class="muted center mt" style="margin-bottom:0">
+            Tabşyranyňyzdan soň jogaplary üýtgedip bolmaýar.
+          </p>
+        </div>
+      </section>
+
+      <!-- 5. Tabşyryldy we netije -->
+      <section v-if="submitted || myResult" class="card center">
+        <h1>Işiňiz tabşyryldy</h1>
+        <template v-if="myResult">
+          <div class="score-big">
+            {{ myResult.score.toFixed(1) }} / {{ myResult.max_score.toFixed(0) }}
+          </div>
+          <p class="muted">{{ myResult.percent.toFixed(0) }}%</p>
+          <span v-if="myResult.preliminary" class="badge warn">
+            deslapky — bir näçe ýumuş el bilen barlanýar
+          </span>
+          <span v-else class="badge ok">✓ doly barlandy</span>
+        </template>
+        <template v-else>
+          <p class="muted">Netijäni mugallym açanda görersiňiz.</p>
+          <span class="badge ok">✓ tabşyryldy</span>
+        </template>
+      </section>
+
+    </template>
+  </main>
+</div>
+
+<script src="/assets/vue.global.prod.js"></script>
+<script type="module" src="/js/student.js"></script>
+</body>
+</html>

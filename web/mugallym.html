@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="tk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sanly Synp — mugallymyň otagy</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">Sanly Synp<small>mugallymyň otagy</small></div>
+    <a class="btn" href="/">Sapak geçirmek</a>
+    <a class="btn" href="/materiallar">Materiallar</a>
+    <a v-if="me && me.role === 'admin'" class="btn" href="/dolandyrys">Dolandyryş</a>
+    <button v-if="me" @click="logout">Çykmak</button>
+  </header>
+
+  <main class="wrap">
+    <div v-if="error" class="notice err" role="alert">
+      <b>{{ error.msg }}</b><span class="next">{{ error.next }}</span>
+    </div>
+    <div v-if="flash" class="notice ok" role="status"><b>{{ flash }}</b></div>
+
+    <template v-if="me">
+      <section class="card">
+        <div class="profile-head">
+          <div class="avatar" aria-hidden="true">{{ initials }}</div>
+          <div class="grow">
+            <h1 style="margin:0">{{ me.full_name }}</h1>
+            <p class="muted" style="margin:2px 0 0">
+              <code>{{ me.login }}</code> ·
+              {{ me.role === 'admin' ? 'ulgam dolandyryjysy' : 'mugallym' }}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div class="grid side">
+        <div>
+          <!-- Näme edildi -->
+          <section v-if="profile" class="card">
+            <h2>Taýýarlanan materiallar</h2>
+            <div class="stat-grid">
+              <div v-for="x in statList" :key="x.k" class="stat">
+                <b>{{ x.v }}</b>
+                <span>{{ x.k }}</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Geçirilen sapaklar -->
+          <section v-if="profile" class="card">
+            <h2>Geçirilen sapaklar</h2>
+
+            <div v-if="!profile.works.length" class="notice info">
+              <b>Entek sapak geçirilmedik</b>
+              <span class="next">Baş sahypada sapagy başladyň — taryh şu ýerde ýygnanar.</span>
+            </div>
+
+            <div v-else class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Sene</th><th>Iş</th><th>Topar</th>
+                    <th class="num">Goşuldy</th><th class="num">Tabşyrdy</th>
+                    <th class="num">Ortaça</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="w in profile.works" :key="w.session_id">
+                    <td>{{ fmtDate(w.date) }}</td>
+                    <td>
+                      {{ w.title }}
+                      <div class="muted" style="font-size:.82rem">
+                        {{ w.subject }} · {{ w.mode === 'homework' ? 'öý işi' : 'janly' }}
+                      </div>
+                    </td>
+                    <td>{{ w.group_name || '—' }}</td>
+                    <td class="num">{{ w.participants }}</td>
+                    <td class="num">{{ w.submitted }}</td>
+                    <td class="num">
+                      <b v-if="w.average != null">{{ Math.round(w.average) }}%</b>
+                      <span v-else class="muted">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- Açar söz -->
+        <aside>
+          <section class="card">
+            <h2>Açar sözi çalyşmak</h2>
+            <p class="muted" style="font-size:.9rem">
+              Başlangyç açar söz bilen işlemek howpsuz däl. Ony diňe özüňiz
+              bilýän açar söze çalşyň.
+            </p>
+            <form @submit.prevent="changePassword">
+              <div class="field">
+                <label for="c">Häzirki açar söz</label>
+                <input id="c" type="password" v-model="pw.current" required
+                       autocomplete="current-password">
+              </div>
+              <div class="field">
+                <label for="n">Täze açar söz <span class="hint">azyndan 4 belgi</span></label>
+                <input id="n" type="password" v-model="pw.next" required
+                       autocomplete="new-password">
+              </div>
+              <button class="btn-primary btn-block" :disabled="busy">Çalyşmak</button>
+            </form>
+          </section>
+        </aside>
+      </div>
+    </template>
+  </main>
+</div>
+
+<script src="/assets/vue.global.prod.js"></script>
+<script type="module" src="/js/mugallym.js"></script>
+</body>
+</html>

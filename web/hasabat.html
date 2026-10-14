@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="tk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sanly Synp — okuwçynyň hasabaty</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar no-print">
+    <div class="brand">Sanly Synp<small>okuwçynyň hasabaty</small></div>
+    <button class="btn-primary" @click="print">Çap etmek</button>
+    <a class="btn" href="/">Yzyna</a>
+  </header>
+
+  <main class="wrap narrow-print">
+    <div v-if="error" class="notice err" role="alert">
+      <b>{{ error.msg }}</b><span class="next">{{ error.next }}</span>
+    </div>
+
+    <template v-if="row">
+      <!-- Hasabatyň başy -->
+      <section class="card report-head">
+        <div class="gol-rule"></div>
+        <h1>Okuwçynyň işiniň hasabaty</h1>
+
+        <table class="meta">
+          <tbody>
+            <tr><th>Okuwçy</th><td>{{ row.name }}</td></tr>
+            <tr v-if="session.group_name"><th>Topar</th><td>{{ session.group_name }}</td></tr>
+            <tr><th>Iş</th><td>{{ session.test_title || session.lesson_title || 'Synag' }}</td></tr>
+            <tr><th>Görnüşi</th>
+                <td>{{ session.mode === 'homework' ? 'Öý işi' : 'Janly sapak' }}</td></tr>
+            <tr><th>Tabşyran wagty</th><td>{{ fmtDate(row.submitted_at) }}</td></tr>
+            <tr><th>Ýagdaýy</th>
+                <td>{{ row.preliminary ? 'Deslapky — käbir ýumuş el bilen barlanýar' : 'Doly barlandy' }}</td></tr>
+          </tbody>
+        </table>
+
+        <div class="score-line">
+          <div>
+            <b>{{ row.score.toFixed(1) }} / {{ row.max_score.toFixed(0) }}</b>
+            <span>jemi bal</span>
+          </div>
+          <div>
+            <b>{{ Math.round(row.percent) }}%</b>
+            <span>göterim</span>
+          </div>
+          <div>
+            <b>{{ correctCount }} / {{ autoCount }}</b>
+            <span>awtomatik barlagda dogry</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Ýumuşlaryň derňewi -->
+      <section class="card">
+        <h2>Ýumuşlar boýunça derňew</h2>
+        <article v-for="(d, i) in rows" :key="d.answer_id" class="q-card">
+          <div class="q-head">
+            <span class="q-num">{{ i + 1 }}.</span>
+            <span class="q-prompt">{{ d.prompt }}</span>
+          </div>
+          <div class="muted" style="font-size:.85rem;margin-bottom:8px">
+            {{ kindLabel(d.kind) }} · {{ d.points }} bal
+          </div>
+
+          <table class="answer">
+            <tbody>
+              <tr>
+                <th>Okuwçynyň jogaby</th>
+                <td>{{ showValue(d.value, d.payload) }}</td>
+              </tr>
+              <tr v-if="(d.value?.files || []).length">
+                <th>Goşulan faýllar</th>
+                <td>{{ d.value.files.map(f => f.file_name).join(', ') }}</td>
+              </tr>
+              <tr>
+                <th>Dogry jogap / ölçeg</th>
+                <td>{{ showValue(d.answer_key, d.payload) }}</td>
+              </tr>
+              <tr v-if="d.explanation">
+                <th>Düşündiriş</th>
+                <td>{{ d.explanation }}</td>
+              </tr>
+              <tr v-if="d.teacher_comment">
+                <th>Mugallymyň belligi</th>
+                <td>{{ d.teacher_comment }}</td>
+              </tr>
+              <tr>
+                <th>Bal</th>
+                <td>
+                  <b>{{ d.score != null ? d.score : '—' }}</b> / {{ d.points }}
+                  <template v-if="d.needs_manual"> · el bilen barlanmaly</template>
+                  <template v-else> · {{ d.is_correct ? 'dogry' : 'ýalňyş' }}</template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+      </section>
+
+      <footer class="report-foot">
+        <div>
+          <span>Mugallymyň goly</span>
+          <div class="sign-line"></div>
+        </div>
+        <div>
+          <span>Senesi</span>
+          <div class="sign-line">{{ today }}</div>
+        </div>
+      </footer>
+    </template>
+
+    <p v-else-if="!error" class="muted">Ýüklenýär…</p>
+  </main>
+</div>
+
+<script src="/assets/vue.global.prod.js"></script>
+<script type="module" src="/js/report.js"></script>
+</body>
+</html>

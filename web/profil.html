@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="tk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sanly Synp — şahsy otag</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">Sanly Synp<small v-if="me">{{ me.group_name }}</small>
+      <small v-else>şahsy otag</small></div>
+    <template v-if="me">
+      <a class="btn" href="/okuwcy">Sapaga goşulmak</a>
+      <button @click="logout">Çykmak</button>
+    </template>
+  </header>
+
+  <main class="wrap" :class="{ narrow: !me }">
+    <div v-if="error" class="notice err" role="alert">
+      <b>{{ error.msg }}</b><span class="next">{{ error.next }}</span>
+    </div>
+
+    <!-- ── Giriş ── -->
+    <section v-if="!me" class="card entry">
+      <p class="eyebrow">Sanly Synp</p>
+      <h1>Şahsy otag</h1>
+      <p class="lede">Mugallymyň beren login we açar sözüňiz bilen giriň.</p>
+      <div class="gol-rule"></div>
+      <form @submit.prevent="login">
+        <div class="field">
+          <label for="lg">Login</label>
+          <input id="lg" v-model="form.login" required autocomplete="username"
+                 autocapitalize="none" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="pw">Açar söz</label>
+          <input id="pw" type="password" v-model="form.password" required
+                 autocomplete="current-password">
+        </div>
+        <button class="btn-primary btn-block" :disabled="busy">Girmek</button>
+      </form>
+      <p class="muted center mt" style="margin-bottom:0">
+        Hasabyňyz ýok bolsa, kod bilen
+        <a href="/okuwcy" class="file-link">sapaga goşulyp</a> bilersiňiz.
+      </p>
+    </section>
+
+    <!-- ── Şahsy otag ── -->
+    <template v-else-if="profile">
+      <section class="card">
+        <div class="profile-head">
+          <div class="avatar" aria-hidden="true">{{ initials }}</div>
+          <div class="grow">
+            <h1 style="margin:0">{{ me.full_name }}</h1>
+            <p class="muted" style="margin:2px 0 0">
+              {{ me.group_name }} · <code>{{ me.login }}</code>
+            </p>
+          </div>
+        </div>
+
+        <div class="score-line mt">
+          <div>
+            <b v-if="profile.average != null">{{ Math.round(profile.average) }}%</b>
+            <b v-else>—</b>
+            <span>ortaça netije</span>
+          </div>
+          <div>
+            <b>{{ profile.done }}</b>
+            <span>bahalandyrylan iş</span>
+          </div>
+          <div>
+            <b>{{ profile.works.length }}</b>
+            <span>jemi iş</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Işleriň taryhy</h2>
+
+        <div v-if="!profile.works.length" class="notice info">
+          <b>Entek iş ýok</b>
+          <span class="next">Sapaga goşulyp, ilkinji işiňizi tabşyranyňyzdan soň
+            olar şu ýerde ýygnanar.</span>
+        </div>
+
+        <ul v-else class="list works">
+          <li v-for="w in profile.works" :key="w.session_id">
+            <div class="grow">
+              <b>{{ w.title }}</b>
+              <small>
+                {{ w.subject }} · {{ w.mode === 'homework' ? 'öý işi' : 'janly sapak' }}
+                · {{ fmtDate(w.date) }}
+              </small>
+            </div>
+
+            <template v-if="w.released">
+              <div class="work-score">
+                <b>{{ Math.round(w.percent) }}%</b>
+                <small>{{ w.score }} / {{ w.max_score }}</small>
+              </div>
+              <span v-if="w.preliminary" class="badge warn">deslapky</span>
+              <span v-else class="badge ok">✓ barlandy</span>
+            </template>
+            <template v-else>
+              <span class="badge">{{ statusLabel(w) }}</span>
+              <span class="badge warn">netije ýapyk</span>
+            </template>
+          </li>
+        </ul>
+
+        <p class="muted mt" style="margin-bottom:0;font-size:.88rem">
+          Netije diňe mugallym ony açandan soň görünýär. Ortaça baha açylan
+          işler boýunça hasaplanýar.
+        </p>
+      </section>
+    </template>
+  </main>
+</div>
+
+<script src="/assets/vue.global.prod.js"></script>
+<script type="module" src="/js/profil.js"></script>
+</body>
+</html>

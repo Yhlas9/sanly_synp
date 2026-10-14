@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="tk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sanly Synp — mugallym</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">Sanly Synp<small>oflaýn okuw platformasy</small></div>
+    <template v-if="me">
+      <a class="btn" href="/materiallar">Materiallar</a>
+      <a class="btn" href="/mugallym">Meniň otagym</a>
+      <a v-if="me && me.role === 'admin'" class="btn" href="/dolandyrys">Dolandyryş</a>
+      <span class="badge">{{ me.full_name }}</span>
+      <button @click="logout">Çykmak</button>
+    </template>
+  </header>
+
+  <main class="wrap" :class="{ narrow: !me }">
+
+    <div v-if="error" class="notice err" role="alert">
+      <b>{{ error.msg }}</b><span class="next">{{ error.next }}</span>
+    </div>
+
+    <!-- Giriş -->
+    <section v-if="!me" class="card entry">
+      <p class="eyebrow">Oflaýn okuw platformasy</p>
+      <h1>Sanly Synp</h1>
+      <p class="lede">Mugallymyň girişi</p>
+      <div class="gol-rule"></div>
+      <form @submit.prevent="login">
+        <div class="field">
+          <label for="lg">Login</label>
+          <input id="lg" v-model="form.login" required autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="pw">Açar söz</label>
+          <input id="pw" type="password" v-model="form.password" required autocomplete="current-password">
+        </div>
+        <button class="btn-primary btn-block" :disabled="busy">Girmek</button>
+      </form>
+    </section>
+
+    <template v-else>
+
+      <!-- Sapagy taýýarlamak -->
+      <section v-if="!session" class="card">
+        <h1>Sapagy başlatmak</h1>
+        <div class="grid cols-2">
+          <div class="field">
+            <label for="ls">Sapak <span class="hint">interaktiw görkezme bilen</span></label>
+            <tk-select id="ls" v-model="pick.lesson" :options="lessonOptions"></tk-select>
+          </div>
+          <div class="field">
+            <label for="ts">Synag <span class="hint">soraglar topary</span></label>
+            <tk-select id="ts" v-model="pick.test" :options="testOptions"></tk-select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="gr">Topar
+            <span class="hint">saýlasaňyz, okuwçylar sanawdan girýär we işler žurnala düşýär</span>
+          </label>
+          <tk-select id="gr" v-model="pick.group" :options="groupOptions"></tk-select>
+        </div>
+
+        <fieldset class="mode-pick">
+          <legend>Geçirilişiň görnüşi</legend>
+          <label class="mode-opt" :class="{ sel: pick.mode === 'live' }">
+            <input type="radio" value="live" v-model="pick.mode">
+            <span>
+              <b>Janly sapak</b>
+              <small>Mugallym synagy özi başladýar, ähli okuwçy bir wagtda işleýär.</small>
+            </span>
+          </label>
+          <label class="mode-opt" :class="{ sel: pick.mode === 'homework' }">
+            <input type="radio" value="homework" v-model="pick.mode">
+            <span>
+              <b>Öý işi</b>
+              <small>Tabşyryk bellenen möhlete çenli açyk. Okuwçy özüne amatly
+                wagtda girýär, möhleti işe başlanyndan hasaplanýar.</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <div v-if="pick.mode === 'homework'" class="grid cols-2">
+          <div class="field">
+            <label for="op">Haçan açylýar
+              <span class="hint">boş bolsa — şu wagtdan</span>
+            </label>
+            <tk-date-time id="op" v-model="pick.opens"></tk-date-time>
+          </div>
+          <div class="field">
+            <label for="cl">Haçan ýapylýar
+              <span class="hint">şondan soň tabşyryk ýapylýar</span>
+            </label>
+            <tk-date-time id="cl" v-model="pick.closes"></tk-date-time>
+          </div>
+        </div>
+
+        <button class="btn-primary" @click="createSession"
+                :disabled="busy || (!pick.lesson && !pick.test)">
+          {{ pick.mode === 'homework' ? 'Öý işini açmak' : 'Sapagy başlat' }}
+        </button>
+      </section>
+
+      <template v-else>
+        <div class="grid side">
+          <div>
+            <!-- Kod -->
+            <section class="card">
+              <div class="code-box">
+                <div v-if="qr" class="qr">
+                  <img :src="qr" alt="Sapaga goşulmak üçin QR kod" width="150" height="150">
+                  <span>Telefonyň kamerasy bilen okaň</span>
+                </div>
+                <div class="muted">Sapak kody</div>
+                <div class="code">{{ session.join_code }}</div>
+                <div class="url">
+                  <div>Okuwçylar: <b>{{ studentURL }}</b></div>
+                  <div v-if="studentUrls.length > 1" class="alt-urls">
+                    beýleki salgylar: <span v-for="(u, i) in studentUrls.slice(1)" :key="u">
+                      {{ i ? ' · ' : '' }}{{ u }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="btn-row mt">
+                <button @click="setState('lesson')" :class="{ 'btn-primary': session.state === 'lesson' }">
+                  Sapagy görkezmek
+                </button>
+                <button v-if="session.mode !== 'homework'" @click="startTest"
+                        :class="{ 'btn-primary': session.state === 'test' }"
+                        :disabled="!session.test_id">
+                  Synagy başlatmak
+                </button>
+                <button @click="toggleJoin">
+                  {{ session.join_open ? 'Goşulmagy ýapmak' : 'Goşulmagy açmak' }}
+                </button>
+                <button :class="{ 'btn-danger': sharing }" @click="toggleShare">
+                  {{ sharing ? 'Ekrany görkezmegi bes etmek' : 'Ekrany görkezmek' }}
+                </button>
+              </div>
+              <div class="btn-row mt" v-if="session.state === 'test' || session.state === 'closed'">
+                <button @click="addTime(5)" :disabled="!session.test_deadline">+5 minut goşmak</button>
+                <button @click="release">Netijeleri okuwçylara açmak</button>
+              </div>
+              <div class="row mt">
+                <span class="badge" :class="session.mode === 'homework' ? 'warn' : 'ok'">
+                  {{ session.mode === 'homework' ? 'Öý işi' : 'Janly sapak' }}
+                </span>
+                <span class="badge" :class="session.state === 'test' ? 'warn' : 'ok'">
+                  Ýagdaý: {{ stateLabel(session.state) }}
+                </span>
+                <span v-if="session.group_name" class="badge">{{ session.group_name }}</span>
+                <span v-if="session.closes_at" class="badge">
+                  Ýapylýar: {{ fmtTime(session.closes_at) }}
+                </span>
+                <span class="badge" :class="session.join_open ? 'ok' : 'danger'">
+                  {{ session.join_open ? '✓ goşulmak açyk' : '✕ goşulmak ýapyk' }}
+                </span>
+                <span v-if="sharing" class="badge warn">● ekran görkezilýär · {{ fps }} kadr/sek</span>
+              </div>
+            </section>
+
+            <!-- Netijeler -->
+            <section v-if="results" class="card">
+              <div class="row">
+                <h2 style="margin:0">Netijeler</h2>
+                <div class="spacer"></div>
+                <a class="btn" :href="'/api/sessions/' + session.id + '/results.csv'">CSV ýükle</a>
+                <button @click="loadResults">Täzele</button>
+              </div>
+
+              <div class="table-scroll mt">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Okuwçy</th><th class="num">Bal</th><th class="num">Göterim</th>
+                      <th>Ýagdaý</th><th class="num">El bilen</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in results.rows" :key="r.participant_id">
+                      <td>{{ r.name }}</td>
+                      <td class="num">{{ r.score.toFixed(1) }} / {{ r.max_score.toFixed(0) }}</td>
+                      <td class="num">{{ r.percent.toFixed(0) }}%</td>
+                      <td>
+                        <span class="badge" :class="statusClass(r)">{{ statusLabel(r) }}</span>
+                      </td>
+                      <td class="num">{{ r.pending_manual || '—' }}</td>
+                      <td>
+                        <button @click="openStudent(r)">Işi açmak</button>
+                        <a class="btn" target="_blank" rel="noopener"
+                           :href="'/hasabat?session=' + session.id + '&student=' + r.participant_id">
+                          Hasabat
+                        </a>
+                      </td>
+                    </tr>
+                    <tr v-if="!results.rows.length">
+                      <td colspan="6" class="muted center">Entek netije ýok.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Iň köp ýalňyşylan soraglar -->
+              <template v-if="results.hardest_questions?.length">
+                <h3 class="mt">Gaýtadan düşündirmeli mowzuklar</h3>
+                <ul class="list">
+                  <li v-for="h in results.hardest_questions" :key="h.question_id">
+                    <span class="grow">{{ h.prompt }}</span>
+                    <span class="badge danger">{{ h.wrong_count }} / {{ h.total_count }} ýalňyş
+                      ({{ h.wrong_share.toFixed(0) }}%)</span>
+                  </li>
+                </ul>
+              </template>
+            </section>
+
+            <!-- Bir okuwçynyň işi -->
+            <section v-if="detail" class="card">
+              <div class="row">
+                <h2 style="margin:0">{{ detail.name }} — işiň derňewi</h2>
+                <div class="spacer"></div>
+                <button @click="detail = null">Ýapmak</button>
+              </div>
+              <article v-for="d in detail.rows" :key="d.answer_id" class="q-card">
+                <div class="q-prompt">{{ d.prompt }}</div>
+                <div class="muted" style="font-size:.85rem">{{ kindLabel(d.kind) }} · {{ d.points }} bal</div>
+                <p><b>Okuwçynyň jogaby:</b> {{ showValue(d.value, d.payload) }}</p>
+                <p v-if="(d.value?.files || []).length">
+                  <b>Goşulan faýllar:</b>
+                  <a v-for="f in d.value.files" :key="f.id" class="file-link"
+                     :href="'/api/files/' + f.id" target="_blank" rel="noopener">
+                    📎 {{ f.file_name }}
+                  </a>
+                </p>
+                <p><b>Dogry jogap / ölçeg:</b> {{ showValue(d.answer_key, d.payload) }}</p>
+                <p v-if="d.explanation" class="muted">{{ d.explanation }}</p>
+                <div class="row">
+                  <span class="badge" :class="d.needs_manual ? 'warn' : (d.is_correct ? 'ok' : 'danger')">
+                    {{ d.needs_manual ? '⏳ el bilen barlanmaly' : (d.is_correct ? '✓ dogry' : '✕ ýalňyş') }}
+                  </span>
+                  <span class="badge">bal: {{ d.score ?? '—' }}</span>
+                </div>
+                <div class="row mt">
+                  <input type="number" step="0.5" min="0" :max="d.points" v-model.number="grade[d.answer_id]"
+                         style="max-width:110px" :aria-label="'Bal: ' + d.prompt" placeholder="bal">
+                  <input type="text" v-model="reason[d.answer_id]" placeholder="Sebäbi / düşündiriş" style="flex:1">
+                  <button class="btn-primary" @click="saveGrade(d)">Baly ýazmak</button>
+                </div>
+              </article>
+            </section>
+          </div>
+
+          <!-- Gapdal: gatnaşyjylar -->
+          <aside>
+            <section class="card">
+              <h2>Gatnaşyjylar <span class="badge">{{ participants.length }}</span></h2>
+              <ul class="list">
+                <li v-for="p in participants" :key="p.id">
+                  <span class="badge" :class="p.connected ? 'ok' : ''">
+                    {{ p.connected ? '●' : '○' }}
+                  </span>
+                  <span class="grow">{{ p.display_name }}</span>
+                  <span v-if="p.submitted" class="badge ok">✓ tabşyrdy</span>
+                  <span v-else class="badge">{{ p.answered }} jogap</span>
+                </li>
+                <li v-if="!participants.length" class="muted">Entek hiç kim goşulmady.</li>
+              </ul>
+              <button class="btn-block mt" @click="loadResults">Netijeleri görmek</button>
+            </section>
+
+            <section v-if="sharing" class="card">
+              <h3>Görkezilýän ekran</h3>
+              <div class="screen-stage"><img :src="preview" alt="Görkezilýän ekranyň nusgasy"></div>
+            </section>
+          </aside>
+        </div>
+      </template>
+    </template>
+  </main>
+</div>
+
+<script src="/assets/vue.global.prod.js"></script>
+<script src="/assets/qrcode.js"></script>
+<script type="module" src="/js/teacher.js"></script>
+</body>
+</html>

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="tk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sanly Synp — dolandyryş</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body class="admin-body">
+<div id="app" class="admin-shell">
+
+  <!-- ══════ Gapdal menýu ══════ -->
+  <nav class="sidebar" aria-label="Dolandyryş bölümleri">
+    <div class="sb-brand">
+      Sanly Synp
+      <small>Dolandyryş</small>
+    </div>
+
+    <ul class="sb-nav">
+      <li v-for="s in SECTIONS" :key="s.id">
+        <button :class="{ active: tab === s.id }" @click="tab = s.id"
+                :aria-current="tab === s.id ? 'page' : null">
+          <span class="sb-mark" aria-hidden="true"></span>
+          <span class="sb-label">{{ s.title }}</span>
+          <span v-if="s.badge && badge(s.id)" class="sb-count">{{ badge(s.id) }}</span>
+        </button>
+      </li>
+    </ul>
+
+    <div class="sb-links">
+      <a href="/">Sapak geçirmek</a>
+      <a href="/materiallar">Materiallar</a>
+      <a href="/mugallym">Meniň otagym</a>
+    </div>
+
+    <div class="sb-foot" v-if="me">
+      <div class="sb-user">
+        <b>{{ me.full_name }}</b>
+        <span>{{ me.login }} · dolandyryjy</span>
+      </div>
+      <button class="sb-exit" @click="logout">Çykmak</button>
+    </div>
+  </nav>
+
+  <!-- ══════ Iş meýdany ══════ -->
+  <main class="admin-main">
+    <header class="admin-head">
+      <h1>{{ current.title }}</h1>
+      <p class="muted">{{ current.lede }}</p>
+    </header>
+
+    <div v-if="error" class="notice err" role="alert">
+      <b>{{ error.msg }}</b><span class="next">{{ error.next }}</span>
+    </div>
+    <div v-if="flash" class="notice ok" role="status"><b>{{ flash }}</b></div>
+
+    <!-- ─── Umumy syn ─── -->
+    <template v-if="tab === 'overview'">
+      <section class="card">
+        <h2>Maglumatlaryň möçberi</h2>
+        <div class="stat-grid">
+          <div v-for="s in statList" :key="s.k" class="stat">
+            <b>{{ s.v }}</b>
+            <span>{{ s.k }}</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="grid cols-2">
+        <section class="card">
+          <h2>Okuwçylar üçin salgy</h2>
+          <p class="muted">Bu salgylar şol bir Wi-Fi ýa-da hotspot-a birigen enjamlarda işleýär.</p>
+          <ul class="list">
+            <li v-for="ip in (system.student_paths || [])" :key="ip">
+              <code class="grow">http://{{ ip }}:8080/okuwcy</code>
+            </li>
+            <li v-if="!(system.student_paths || []).length" class="muted">Ýerli tor tapylmady.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h2>Işleýşi</h2>
+          <table class="meta">
+            <tbody>
+              <tr><th>Işe girizilen</th><td>{{ fmtDate(system.started_at) }}</td></tr>
+              <tr><th>Işleýän wagty</th><td>{{ uptime }}</td></tr>
+              <tr><th>Maglumat binýady</th><td><code>{{ system.db_name }}</code></td></tr>
+              <tr><th>Ätiýaçlyk nusgalar</th><td>{{ kb(system.backup_bytes || 0) }}</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </template>
+
+    <!-- ─── Hasaplar ─── -->
+    <template v-if="tab === 'accounts'">
+      <section class="card">
+        <h2>Hasaplaryň sanawy</h2>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Login</th><th>Doly ady</th><th>Hukugy</th>
+                <th class="num">Sapak</th><th class="num">Geçiriliş</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="t in teachers" :key="t.id">
+                <td><code>{{ t.login }}</code></td>
+                <td>{{ t.full_name }}</td>
+                <td>
+                  <span class="badge" :class="t.role === 'admin' ? 'warn' : ''">
+                    {{ t.role === 'admin' ? 'dolandyryjy' : 'mugallym' }}
+                  </span>
+                </td>
+                <td class="num">{{ t.lesson_count }}</td>
+                <td class="num">{{ t.session_count }}</td>
+                <td class="num">{{ t.group_count }}</td>
+                <td class="num">{{ t.student_count }}</td>
+                <td>
+                  <button @click="askPassword(t)">Açar söz</button>
+                  <button class="btn-danger" @click="removeTeacher(t)">Pozmak</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="pwFor" class="q-card mt">
+          <h3>{{ pwFor.full_name }} — täze açar söz</h3>
+          <div class="row">
+            <input type="text" v-model="pwValue" placeholder="Azyndan 4 belgi" style="flex:1">
+            <button class="btn-primary" @click="savePassword" :disabled="busy">Ýazmak</button>
+            <button @click="pwFor = null">Ýatyrmak</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Täze hasap</h2>
+        <div class="grid cols-2">
+          <div class="field">
+            <label for="lg">Login</label>
+            <input id="lg" v-model="form.login" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="fn">Doly ady</label>
+            <input id="fn" v-model="form.full_name">
+          </div>
+          <div class="field">
+            <label for="pw">Açar söz</label>
+            <input id="pw" type="text" v-model="form.password" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="rl">Hukugy</label>
+            <tk-select id="rl" v-model="form.role" :options="roleOptions"></tk-select>
+          </div>
+        </div>
+        <button class="btn-primary" @click="createTeacher" :disabled="busy">Hasap döretmek</button>
+      </section>
+    </template>
+
+    <!-- ─── Okuwçylar ─── -->
+    <template v-if="tab === 'students'">
+      <section class="card">
+        <h2>Toparlar</h2>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Topar</th><th>Mugallym</th><th class="num">Okuwçy</th>
+                  <th class="num">Hasaply</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="g in groups" :key="g.id">
+                <td>{{ g.name }}</td>
+                <td>{{ g.teacher_name }}</td>
+                <td class="num">{{ g.students }}</td>
+                <td class="num">
+                  <span class="badge" :class="g.with_account === g.students && g.students ? 'ok' : ''">
+                    {{ g.with_account }} / {{ g.students }}
+                  </span>
+                </td>
+                <td>
+                  <button :disabled="busy || g.with_account >= g.students"
+                          @click="makeGroupAccounts(g)">Hasap döretmek</button>
+                </td>
+              </tr>
+              <tr v-if="!groups.length"><td colspan="5" class="muted center">Topar ýok.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <h2 style="margin:0">Ähli okuwçylar <span class="badge">{{ students.length }}</span></h2>
+          <div class="spacer"></div>
+          <tk-select v-model="studentFilter" :options="groupFilterOptions"
+                     style="max-width:240px" id="sf"></tk-select>
+        </div>
+
+        <div class="table-scroll mt">
+          <table>
+            <thead>
+              <tr><th>Okuwçy</th><th>Topar</th><th>Mugallym</th><th>Login</th>
+                  <th class="num">Iş</th><th>Soňky giriş</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="st in filteredStudents" :key="st.id">
+                <td>{{ st.full_name }}</td>
+                <td>{{ st.group_name }}</td>
+                <td class="muted">{{ st.teacher_name }}</td>
+                <td>
+                  <code v-if="st.has_login">{{ st.login }}</code>
+                  <span v-else class="badge">hasapsyz</span>
+                </td>
+                <td class="num">{{ st.works }}</td>
+                <td class="muted">{{ st.last_login_at ? fmtDate(st.last_login_at) : '—' }}</td>
+                <td>
+                  <button v-if="st.has_login" @click="resetStudent(st)">Täze açar söz</button>
+                </td>
+              </tr>
+              <tr v-if="!filteredStudents.length">
+                <td colspan="7" class="muted center">Okuwçy ýok.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
+
+    <!-- ─── Ätiýaçlyk nusgalar ─── -->
+    <template v-if="tab === 'backups'">
+      <section class="card">
+        <div class="row">
+          <h2 style="margin:0">Nusgalar</h2>
+          <div class="spacer"></div>
+          <button class="btn-primary" @click="makeBackup" :disabled="busy">Täze nusga döretmek</button>
+        </div>
+        <p class="muted mt">
+          Nusga maglumat binýadyny öz içine alýar. Amaly işleriň faýllary
+          <code>{{ system.upload_dir }}</code> bukjasynda aýratyn saklanýar
+          ({{ kb(system.upload_bytes || 0) }}).
+        </p>
+
+        <div class="table-scroll mt">
+          <table>
+            <thead>
+              <tr><th>Döredilen wagty</th><th>Faýl</th><th class="num">Ölçegi</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="b in backups" :key="b.name">
+                <td>{{ fmtDate(b.created_at) }}</td>
+                <td><code>{{ b.name }}</code></td>
+                <td class="num">{{ kb(b.size_bytes) }}</td>
+                <td>
+                  <a class="btn" :href="'/api/admin/backups/' + b.name">Ýükle</a>
+                  <button class="btn-danger" @click="askRestore(b)">Dikelt</button>
+                </td>
+              </tr>
+              <tr v-if="!backups.length"><td colspan="4" class="muted center">Nusga ýok.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="restoreFor" class="notice err mt">
+          <b>Maglumatlar {{ fmtDate(restoreFor.created_at) }} ýagdaýyna dolanar</b>
+          <span class="next">Şondan soňky ähli işler ýitýär. Tassyklamak üçin
+            <code>DIKELT</code> ýazyň.</span>
+          <div class="row mt">
+            <input v-model="restoreConfirm" placeholder="DIKELT" style="flex:1;max-width:220px">
+            <button class="btn-danger" @click="doRestore" :disabled="busy">Dikeltmek</button>
+            <button @click="restoreFor = null">Ýatyrmak</button>
+          </div>
+        </div>
+      </section>
+    </template>
+
+    <!-- Berlen login we açar sözler -->
+    <section v-if="creds.length" class="card creds">
+      <div class="row no-print">
+        <h2 style="margin:0">Berlen hasaplar</h2>
+        <div class="spacer"></div>
+        <button @click="printCreds">Çap etmek</button>
+        <button @click="creds = []">Ýapmak</button>
+      </div>
+      <div class="notice info no-print">
+        <b>Açar sözler diňe şu ýerde bir gezek görkezilýär</b>
+        <span class="next">Çap edip paýlaň. Ýitse, «Täze açar söz» düwmesi
+          täzesini döredýär.</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Ady</th><th>Login</th><th>Açar söz</th><th>Salgy</th></tr></thead>
+          <tbody>
+            <tr v-for="c in creds" :key="c.login">
+              <td>{{ c.full_name }}</td>
+              <td><code>{{ c.login }}</code></td>
+              <td><code><b>{{ c.password }}</b></code></td>
+              <td><code>{{ host }}{{ c.path }}</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─── Ulgam ─── -->
+    <template v-if="tab === 'system'">
+      <section class="card">
+        <h2>Ulgam barada</h2>
+        <table class="meta">
+          <tbody>
+            <tr><th>Platforma</th><td><code>{{ system.platform }}</code></td></tr>
+            <tr><th>Go</th><td><code>{{ system.go_version }}</code></td></tr>
+            <tr><th>Maglumat binýady</th><td><code>{{ system.db_name }}</code> (PostgreSQL)</td></tr>
+            <tr><th>Işe girizilen</th><td>{{ fmtDate(system.started_at) }}</td></tr>
+            <tr><th>Işleýän wagty</th><td>{{ uptime }}</td></tr>
+            <tr><th>Faýllaryň bukjasy</th><td><code>{{ system.upload_dir }}</code> · {{ kb(system.upload_bytes || 0) }}</td></tr>
+            <tr><th>Faýlyň iň uly ölçegi</th><td>{{ system.max_upload_mb }} MB</td></tr>
+            <tr><th>Internet</th><td>Esasy mümkinçilikler üçin gerek däl</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>Howpsuzlyk barlagy</h2>
+        <ul class="list">
+          <li>
+            <span class="grow">Başlangyç açar sözler çalşyldymy</span>
+            <span class="badge warn">el bilen barlaň</span>
+          </li>
+          <li>
+            <span class="grow">Dogry jogaplaryň açary okuwça ugradylmaýar</span>
+            <span class="badge ok">✓ hawa</span>
+          </li>
+          <li>
+            <span class="grow">Synagyň möhletini serwer hasaplaýar</span>
+            <span class="badge ok">✓ hawa</span>
+          </li>
+          <li>
+            <span class="grow">Faýly diňe mugallym we eýesi görýär</span>
+            <span class="badge ok">✓ hawa</span>
+          </li>
+        </ul>
+      </section>
+    </template>
+  </main>
+</div>
+
+<script src="/assets/vue.global.prod.js"></script>
+<script type="module" src="/js/admin.js"></script>
+</body>
+</html>
